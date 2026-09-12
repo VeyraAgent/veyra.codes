@@ -1,0 +1,73 @@
+---
+import '../styles/global.css'
+import { SITE } from '../config/site'
+import { BUILD } from '../config/build'
+
+interface Props {
+  title: string
+  description: string
+  ogImage?: string
+  type?: 'website' | 'article'
+  jsonLd?: Record<string, unknown>
+  noindex?: boolean
+}
+
+const { title, description, ogImage = '/og-default.png', type = 'website', jsonLd, noindex = false } = Astro.props
+const canonical = new URL(Astro.url.pathname, SITE.url).href
+const ogImageAbs = new URL(ogImage, SITE.url).href
+---
+
+<!doctype html>
+<html lang="en" data-theme="default">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#16161e" />
+    {/* preload the terminal font so the above-the-fold logo paints in Cascadia
+        Mono, not a fallback (crossorigin is required even same-origin: font
+        fetches are always CORS-anonymous, so the preload must match) */}
+    <link rel="preload" href="/fonts/CascadiaMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="alternate" type="application/rss+xml" title={SITE.title} href="/rss.xml" />
+    {noindex && <meta name="robots" content="noindex" />}
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={type} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImageAbs} />
+    <meta property="og:site_name" content={SITE.title} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageAbs} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+    <slot name="head" />
+    <script is:inline>
+      // theme before first paint — no FOUC
+      try {
+        var t = localStorage.getItem('veyra:theme')
+        var ok = ['default', 'crt', 'amber', 'light', 'birthday', 'halloween', 'christmas', 'newyear', 'lunar', 'valentine', 'aureus']
+        if (t && ok.indexOf(t) !== -1) {
+          document.documentElement.dataset.theme = t
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#site-nav">Skip to navigation</a>
+    <slot />
+    <footer id="site-nav" class="muted site-footer">
+      <nav aria-label="Site">
+        <a href="/">~ terminal</a> · <a href="/blog/">blog</a> · <a href="/study/">study</a> ·
+        <a href="/ctf/">ctf</a> · <a href="/about/">about</a> · <a href="/projects/">projects</a> ·
+        <a href={SITE.github}>github</a> · <a href="/rss.xml">rss</a>
+      </nav>
+      <p>© 2026 <a href={SITE.github}>{SITE.name}</a>{BUILD.sha !== 'dev' && (
+        <span class="muted"> · built <a href={`https://github.com/VeyraAgent/veyra.codes/commit/${BUILD.sha}`}>{BUILD.sha}</a>{BUILD.date && ` · ${BUILD.date.slice(0, 10)}`}</span>
+      )}</p>
+    </footer>
+  </body>
+</html>

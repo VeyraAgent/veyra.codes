@@ -1,0 +1,228 @@
+---
+import { readFileSync } from 'node:fs'
+import BaseLayout from '../layouts/BaseLayout.astro'
+import { getCollection } from 'astro:content'
+import { SITE } from '../config/site'
+import { extractVerses, pickDaily, refLabel } from '../components/terminal/core/bible'
+import type { BibleBook, BibleIndex } from '../components/terminal/core/bible'
+import { getProjects, getStats } from '../lib/github'
+
+const projects = await getProjects()
+const stats = await getStats()
+
+const posts = (await getCollection('blog', ({ data }) => (import.meta.env.PROD ? !data.draft : true)))
+  .map((p) => ({
+    slug: p.id,
+    title: p.data.title,
+    description: p.data.description,
+    date: p.data.pubDate.toISOString().slice(0, 10),
+  }))
+  .sort((a, b) => b.date.localeCompare(a.date))
+
+const studies = (await getCollection('study', ({ data }) => (import.meta.env.PROD ? !data.draft : true)))
+  .map((s) => ({
+    slug: s.id,
+    title: s.data.title,
+    description: s.data.description,
+    date: s.data.pubDate.toISOString().slice(0, 10),
+  }))
+  .sort((a, b) => b.date.localeCompare(a.date))
+
+// verse of the day: prerendered at build time (crawlable), refreshed to
+// the current day client-side after the terminal mounts
+const bibleIndex = JSON.parse(readFileSync('public/bible/index.json', 'utf8')) as BibleIndex
+const votdDate = new Date().toISOString().slice(0, 10)
+let votdRef = pickDaily(bibleIndex, votdDate)
+let votdBook = JSON.parse(readFileSync(`public/bible/${votdRef.slug}.json`, 'utf8')) as BibleBook
+let votdVerse = extractVerses(votdBook, votdRef)?.[0]
+if (!votdVerse) {
+  // rare: the daily pick landed on a verse omitted by the WEB translation
+  votdRef = { slug: 'john', name: 'John', chapter: 3, verseStart: 16 }
+  votdBook = JSON.parse(readFileSync('public/bible/john.json', 'utf8')) as BibleBook
+  votdVerse = extractVerses(votdBook, votdRef)![0]!
+}
+const votdCmd = `bible ${votdRef.slug} ${votdRef.chapter}:${votdRef.verseStart}`
+
+const personLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: SITE.name,
+  url: SITE.url,
+  sameAs: [SITE.github],
+  description: SITE.description,
+}
+---
+
+<BaseLayout title={SITE.title} description={SITE.description} jsonLd={personLd}>
+  <Fragment
+    set:html={`<!--
+██╗   ██╗███████╗██╗   ██╗██████╗  █████╗ 
+██║   ██║██╔════╝╚██╗ ██╔╝██╔══██╗██╔══██╗
+██║   ██║█████╗   ╚████╔╝ ██████╔╝███████║
+╚██╗ ██╔╝██╔══╝    ╚██╔╝  ██╔══██╗██╔══██║
+ ╚████╔╝ ███████╗   ██║   ██║  ██║██║  ██║
+  ╚═══╝  ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
+
+   well well well. a source reader. i like you already.
+   the console has something for you. so does ~/.secrets — if you can find it.
+   flags look like veyra{...} and the terminal knows what to do with them.
+-->`}
+  />
+  <main id="terminal" class="term-window" aria-label="Interactive terminal">
+    <div class="term-titlebar">
+      <div class="dots"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span></div>
+      <span class="title">guest@veyra.codes: ~</span>
+    </div>
+    <div class="term-body">
+      <div id="term-output" aria-live="polite">
+        <section id="motd">
+          <pre class="line-ascii logo" aria-hidden="true">{`
+██╗   ██╗███████╗██╗   ██╗██████╗  █████╗ 
+██║   ██║██╔════╝╚██╗ ██╔╝██╔══██╗██╔══██╗
+██║   ██║█████╗   ╚████╔╝ ██████╔╝███████║
+╚██╗ ██╔╝██╔══╝    ╚██╔╝  ██╔══██╗██╔══██║
+ ╚████╔╝ ███████╗   ██║   ██║  ██║██║  ██║
+  ╚═══╝  ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
+`}</pre>
+          <h1>{SITE.name} <span class="muted">@ veyra.codes</span></h1>
+          <p id="votd" class="muted" data-date={votdDate}>
+            ✝ “<span id="votd-text">{votdVerse.text}</span>” —
+            <button type="button" class="cmd-link" data-cmd={votdCmd}>{refLabel(votdRef)}</button>
+          </p>
+          <p class="muted">
+            Type <button type="button" class="cmd-link" data-cmd="help">help</button> to begin.
+            Mouse users: commands are clickable. Keyboard users: you already know what to do.
+          </p>
+        </section>
+      </div>
+      <div id="term-input-line" hidden>
+        <label class="sr-only" for="term-input">Terminal command input</label>
+        <span id="term-prompt">guest@veyra.codes:~$</span>
+        <input id="term-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" />
+      </div>
+    </div>
+  </main>
+  <script type="application/json" id="terminal-data" set:html={JSON.stringify({ posts: posts.map((p) => ({ slug: p.slug, title: p.title, description: '', date: p.date })), studies: studies.map((s) => ({ slug: s.slug, title: s.title, description: '', date: s.date })), projects, stats }).replaceAll('<', '\u003c')} />
+  <script>
+    import { mountTerminal } from '../components/terminal/index'
+    mountTerminal()
+  </script>
+</BaseLayout>
+
+<style is:global>
+  /* homepage only: lock the page height so the terminal scrolls internally,
+     like a real terminal window — the page itself never grows.
+     overflow:hidden must sit on html too: body's overflow alone propagates
+     to the viewport (body reverts to visible) and descendants leak through */
+  html:has(#terminal) {
+    height: 100%;
+    overflow: hidden;
+  }
+  body:has(#terminal) {
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  body:has(#terminal) footer {
+    flex: none;
+    padding: 0.5rem 1rem;
+  }
+  /* homepage IS the terminal — hide the footer nav here (kept in the DOM,
+     visually clipped, so crawlers and the skip-link still reach it) */
+  body:has(#terminal) .site-footer nav {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>
+
+<style>
+  #terminal {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    width: min(60rem, calc(100% - 2rem));
+    margin: 1.2rem auto 0.6rem;
+  }
+  #terminal .term-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* only overflow-y was declared, so per CSS the other axis computes to
+       `auto` — the body silently became a two-axis scroll container. On macOS
+       that x-scrollbar is a 0px auto-hiding overlay (invisible); on Windows it
+       is a classic ~17px bar pinned to the terminal's bottom edge. `clip` makes
+       the body permanently non-scrolling on x, so that bar can never appear;
+       `scrollbar-gutter: stable` reserves the vertical bar's width on every OS
+       so the inner content width is deterministic (no Windows-vs-mac drift). */
+    overflow-x: clip;
+    scrollbar-gutter: stable;
+    /* chromium quirk: without a containment boundary, this flex-item scroll
+       container's overflow leaks into the viewport's scroll area (phantom
+       page scroll). contain:paint seals it. */
+    contain: paint;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--fg-muted) 55%, transparent) transparent;
+  }
+  #terminal .term-body::-webkit-scrollbar { width: 8px; }
+  #terminal .term-body::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--fg-muted) 55%, transparent);
+    border-radius: 4px;
+  }
+  #terminal .term-body::-webkit-scrollbar-track { background: transparent; }
+  @media (max-width: 640px) {
+    #terminal { margin: 0; width: 100%; min-height: 0; }
+  }
+
+  #term-input-line { display: flex; gap: 0.6rem; margin-top: 0.35rem; }
+  #term-input-line[hidden] { display: none; }
+  #term-prompt { color: var(--ok); white-space: nowrap; }
+  #term-input {
+    flex: 1;
+    /* a flex item defaults to min-width:auto (its intrinsic field width), which
+       on a narrow viewport keeps the input row from shrinking and pushes the
+       terminal body wider than the screen. 0 lets it shrink; typed text then
+       scrolls natively inside the field instead of widening the terminal. */
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--fg);
+    font: inherit;
+    caret-color: var(--accent);
+    padding: 0;
+  }
+  #motd h1 { font-size: 1.15rem; margin: 0.8rem 0 0.3rem; }
+  #motd p { margin: 0.4rem 0; }
+
+  /* make #motd a query container so the logo can size off the terminal's inner
+     width via 100cqi (content-box, already net of padding + reserved gutter) —
+     unlike 100vw, which ignores both and mis-sized the art on Windows. Scoped
+     to #motd (not the .term-body scroll container) to avoid touching its
+     flex/overflow behavior. */
+  #motd { container-type: inline-size; }
+
+  /* logo: theme-aware vertical gradient fill + soft glow.
+     text-shadow must be off — it would paint behind the transparent fill. */
+  #motd .logo {
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 55%, var(--fg-muted) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: none;
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 45%, transparent));
+    line-height: 1.25;
+    /* 62-col art shrinks to fit narrow screens. 100cqi = #motd content-box
+       inline size; divisor 40 = 62 cols × ~0.645em, leaving headroom over
+       Cascadia Mono's 0.586em advance so the art always fits. The min(1em, …)
+       cap keeps the desktop logo at the full body font size. */
+    font-size: min(1em, calc(100cqi / 40));
+  }
+  #term-output :global(.term-line) { white-space: pre-wrap; word-break: break-word; min-height: 1.2em; }
+</style>

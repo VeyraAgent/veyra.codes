@@ -1,0 +1,207 @@
+import { test, expect, type Page } from '@playwright/test'
+
+// skip the boot animation for deterministic tests
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem('veyra:booted', '1'))
+  await page.goto('/')
+})
+
+async function run(page: Page, cmd: string): Promise<void> {
+  await page.locator('#term-input').fill(cmd)
+  await page.locator('#term-input').press('Enter')
+}
+
+test('static motd and crawlable footer nav are present for no-js visitors', async ({ page }) => {
+  await expect(page.locator('#motd h1')).toContainText('VeyraAgent')
+  // nav links stay in the DOM for crawlers/screen readers but are sr-only:
+  // clipped to a 1px box, so humans see only the copyright line
+  await expect(page.locator('footer nav a[href="/blog/"]')).toBeAttached()
+  const navBox = await page.locator('footer nav').boundingBox()
+  expect(navBox?.width ?? 0).toBeLessThanOrEqual(1)
+  await expect(page.locator('footer')).toContainText('© 2026 VeyraAgent')
+})
+
+test('help lists commands and hides easter eggs', async ({ page }) => {
+  await run(page, 'help')
+  const output = page.locator('#term-output')
+  await expect(output).toContainText('theme')
+  await expect(output).toContainText('neofetch')
+  await expect(output.getByRole('button', { name: 'sudo' })).toHaveCount(0)
+})
+
+test('clicking a command link executes it and returns focus to the input', async ({ page }) => {
+  await run(page, 'help')
+  await page.locator('#term-output .cmd-link[data-cmd="neofetch"]').first().click()
+  await expect(page.locator('#term-output')).toContainText('veyra.codes 1.0 (Olympus)')
+  await expect(page.locator('#term-input')).toBeFocused()
+})
+
+test('tab completes a unique prefix', async ({ page }) => {
+  const input = page.locator('#term-input')
+  await input.fill('neo')
+  await input.press('Tab')
+  await expect(input).toHaveValue('neofetch')
+})
+
+test('arrow-up recalls history', async ({ page }) => {
+  await run(page, 'whoami')
+  await page.locator('#term-input').press('ArrowUp')
+  await expect(page.locator('#term-input')).toHaveValue('whoami')
+})
+
+test('theme switch persists across reloads', async ({ page }) => {
+  await run(page, 'theme crt')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'crt')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'crt')
+})
+
+test('filesystem: ls reveals .secrets and cat reads the prophecy', async ({ page }) => {
+  await run(page, 'ls')
+  await expect(page.locator('#term-output')).toContainText('.secrets/')
+  await run(page, 'cat .secrets/prophecy.txt')
+  await expect(page.locator('#term-output')).toContainText('M29xp3fjoTEsMmOxp19hZ3qsqUVkL2gmsD==')
+})
+
+test('sudo gets roasted', async ({ page }) => {
+  await run(page, 'sudo rm -rf /')
+  await expect(page.locator('#term-output')).toContainText('not in the sudoers file')
+})
+
+test('vim traps until :q!', async ({ page }) => {
+  await run(page, 'vim')
+  await expect(page.locator('#term-prompt')).toHaveText('--INSERT--')
+  await run(page, ':q!')
+  await expect(page.locator('#term-output')).toContainText('escaped vim')
+})
+
+test('wrong flag is rejected', async ({ page }) => {
+  await run(page, 'flag submit veyra{definitely_wrong}')
+  await expect(page.locator('#term-output')).toContainText('not fooled')
+})
+
+test('terminal scrolls internally while the page height stays fixed', async ({ page }) => {
+  for (let i = 0; i < 5; i++) await run(page, 'help')
+  const pageOverflow = await page.evaluate(
+    () => document.documentElement.scrollHeight - window.innerHeight,
+  )
+  expect(pageOverflow).toBeLessThanOrEqual(1)
+  const body = page.locator('#terminal .term-body')
+  const inner = await body.evaluate((el) => ({
+    canScroll: el.scrollHeight > el.clientHeight,
+    atBottom: el.scrollHeight - el.scrollTop - el.clientHeight < 4,
+  }))
+  expect(inner.canScroll).toBe(true)
+  expect(inner.atBottom).toBe(true)
+})
+
+test('bible command reads scripture from the terminal', async ({ page }) => {
+  await run(page, 'bible john 3:16')
+  await expect(page.locator('#term-output')).toContainText('John 3:16 · WEB')
+  await expect(page.locator('#term-output')).toContainText('For God so loved the world')
+})
+
+test('bible books lists the canon', async ({ page }) => {
+  await run(page, 'bible books')
+  await expect(page.locator('#term-output')).toContainText('Revelation')
+  await expect(page.locator('#term-output .cmd-link[data-cmd="bible matthew 1"]')).toBeVisible()
+})
+
+test('a random verse loads on every visit and executes on click', async ({ page }) => {
+  await expect(page.locator('#votd')).toBeVisible()
+  await expect(page.locator('#votd[data-random="1"]')).toBeAttached()
+  const first = await page.locator('#votd-text').textContent()
+  await page.reload()
+  await expect(page.locator('#votd[data-random="1"]')).toBeAttached()
+  const second = await page.locator('#votd-text').textContent()
+  expect(first).toBeTruthy()
+  expect(second).toBeTruthy()
+  // ~7900 節可选，两次连续加载撞同一节的概率可忽略（CI 有重试兜底）
+  expect(second).not.toBe(first)
+  await page.locator('#votd .cmd-link').click()
+  await expect(page.locator('#term-output')).toContainText('· WEB')
+})
+
+test('bible classics lists clickable passages that read scripture', async ({ page }) => {
+  await run(page, 'bible classics')
+  await expect(page.locator('#term-output')).toContainText('The Prodigal Son')
+  await page.locator('#term-output .cmd-link[data-cmd="bible luke 15:11-32"]').click()
+  await expect(page.locator('#term-output')).toContainText('Luke 15:11-32 · WEB')
+  await expect(page.locator('#term-output')).toContainText('A certain man had two sons')
+})
+
+test('study command lists notes and navigates to an article', async ({ page }) => {
+  await run(page, 'study')
+  await expect(page.locator('#term-output')).toContainText('the-prodigal-son')
+  await run(page, 'study read the-prodigal-son')
+  await page.waitForURL('**/study/the-prodigal-son/')
+  await expect(page.locator('article.post h1')).toContainText('The Prodigal Son')
+  await expect(page.locator('article.post .passage')).toContainText('Luke 15:11-32')
+})
+
+test('ctf lists the challenge board with a scoreboard', async ({ page }) => {
+  await run(page, 'ctf')
+  await expect(page.locator('#term-output')).toContainText('veyra.codes CTF')
+  await expect(page.locator('#term-output')).toContainText('0/1375 pts')
+  await expect(page.locator('#term-output')).toContainText('FIELD OPS')
+  await expect(page.locator('#term-output .cmd-link[data-cmd="ctf scroll-of-hermes"]')).toBeVisible()
+  await expect(page.locator('#term-output .cmd-link[data-cmd="ctf bogus-signer"]')).toBeVisible()
+})
+
+test('ctf badges grid lists achievements', async ({ page }) => {
+  await run(page, 'ctf badges')
+  await expect(page.locator('#term-output')).toContainText('First Blood')
+  await expect(page.locator('#term-output')).toContainText('Veyra of veyra.codes')
+})
+
+test('ctf challenge detail shows prompt and hints', async ({ page }) => {
+  await run(page, 'ctf scroll-of-hermes')
+  await expect(page.locator('#term-output')).toContainText('Scroll of Hermes')
+  await run(page, 'ctf scroll-of-hermes hint 1')
+  await expect(page.locator('#term-output')).toContainText('hint 1/')
+})
+
+test('ctf artifact files are reachable in the terminal filesystem', async ({ page }) => {
+  await run(page, 'cat ~/.ctf/scroll_of_hermes')
+  await expect(page.locator('#term-output')).toContainText('SCROLL OF HERMES')
+  await run(page, 'cat /opt/olympus/forge.js')
+  await expect(page.locator('#term-output')).toContainText('function keygen')
+  await run(page, 'cat /var/log/olympus/access.log')
+  await expect(page.locator('#term-output')).toContainText('/styx/ferry')
+})
+
+test('solve a challenge end-to-end (flag decoded at runtime, never hardcoded)', async ({ page }) => {
+  await run(page, 'cat ~/.ctf/scroll_of_hermes')
+  // decode the shipped payload in-browser: base64 then ROT13 — the flag is
+  // never written into this test file, only derived from the artifact
+  const flag = await page.evaluate(() => {
+    const text = document.querySelector('#term-output')!.textContent ?? ''
+    const payload = text.match(/[A-Za-z0-9+/]{24,}={0,2}/)![0]
+    const rot13 = (s: string) =>
+      s.replace(/[a-zA-Z]/g, (c) => {
+        const b = c <= 'Z' ? 65 : 97
+        return String.fromCharCode(((c.charCodeAt(0) - b + 13) % 26) + b)
+      })
+    return rot13(atob(payload))
+  })
+  expect(flag).toMatch(/^gods\{.+\}$/)
+  await run(page, `flag submit ${flag}`)
+  await expect(page.locator('#term-output')).toContainText('captured!')
+  // solved-state persists to the scoreboard and across a reload
+  await run(page, 'ctf scoreboard')
+  await expect(page.locator('#term-output')).toContainText('75/')
+  await page.reload()
+  await run(page, 'ctf scoreboard')
+  await expect(page.locator('#term-output')).toContainText('solved 1/')
+})
+
+test('unknown command suggests help', async ({ page }) => {
+  await run(page, 'frobnicate')
+  await expect(page.locator('#term-output')).toContainText('command not found')
+})
+
+test('blog command lists posts and navigates', async ({ page }) => {
+  await run(page, 'blog read building-veyra-codes')
+  await page.waitForURL('**/blog/building-veyra-codes/')
+  await expect(page.locator('article.post h1')).toContainText('Building veyra.codes')
+})

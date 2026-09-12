@@ -1,0 +1,140 @@
+/* ── veyra.codes theme system ─────────────────────────────
+   Themes switch via <html data-theme="...">.
+   Try: default | crt | amber | light          */
+
+:root,
+:root[data-theme='default'] {
+  --bg: #16161e;
+  --bg-elev: #1a1b26;
+  --bg-titlebar: #13131a;
+  --fg: #c0caf5;
+  --fg-muted: #565f89;
+  --accent: #7aa2f7;
+  --accent-2: #bb9af7;
+  --ok: #9ece6a;
+  --err: #f7768e;
+  --warn: #e0af68;
+  --glow: transparent;
+  --selection: #33467c;
+}
+
+:root[data-theme='crt'] {
+  --bg: #020a02;
+  --bg-elev: #041004;
+  --bg-titlebar: #030c03;
+  --fg: #33ff66;
+  --fg-muted: #1d8c3d;
+  --accent: #66ff99;
+  --accent-2: #99ffbb;
+  --ok: #66ff99;
+  --err: #ff5555;
+  --warn: #ffcc33;
+  --glow: rgba(51, 255, 102, 0.55);
+  --selection: #0d4d1f;
+}
+
+:root[data-theme='amber'] {
+  --bg: #0d0800;
+  --bg-elev: #150d02;
+  --bg-titlebar: #100a01;
+  --fg: #ffb000;
+  --fg-muted: #8c6a1d;
+  --accent: #ffc933;
+  --accent-2: #ffdd66;
+  --ok: #ffc933;
+  --err: #ff5555;
+  --warn: #ffdd66;
+  --glow: rgba(255, 176, 0, 0.45);
+  --selection: #4d3800;
+}
+
+:root[data-theme='light'] {
+  --bg: #fafafa;
+  --bg-elev: #ffffff;
+  --bg-titlebar: #ececec;
+  --fg: #1a1a2e;
+  --fg-muted: #6b7280;
+  --accent: #2563eb;
+  --accent-2: #7c3aed;
+  --ok: #16a34a;
+  --err: #dc2626;
+  --warn: #d97706;
+  --glow: transparent;
+  --selection: #bfdbfe;
+}
+
+:root[data-theme='light'] { color-scheme: light; }
+
+/* ── seasonal / festival palettes (date-driven, or `theme <name>`) ── */
+:root[data-theme='birthday'] {
+  --bg: #1a0f24; --bg-elev: #241432; --bg-titlebar: #150c1e;
+  --fg: #ffe8ff; --fg-muted: #a173b5;
+  --accent: #ff5fd2; --accent-2: #ffd24a; --ok: #5ff0c0; --err: #ff6b8a; --warn: #ffd24a;
+  --glow: rgba(255, 95, 210, 0.5); --selection: #5a2a6e;
+}
+:root[data-theme='halloween'] {
+  --bg: #120a02; --bg-elev: #1c1006; --bg-titlebar: #0d0701;
+  --fg: #ffcf99; --fg-muted: #8c5a2b;
+  --accent: #ff7518; --accent-2: #a259ff; --ok: #9ece6a; --err: #ff4d4d; --warn: #ff7518;
+  --glow: rgba(255, 117, 24, 0.45); --selection: #4d2600;
+}
+:root[data-theme='christmas'] {
+  --bg: #0a1410; --bg-elev: #0f1d16; --bg-titlebar: #081109;
+  --fg: #eaf6ea; --fg-muted: #5c8c6a;
+  --accent: #e63946; --accent-2: #2ecc71; --ok: #2ecc71; --err: #e63946; --warn: #f4c542;
+  --glow: rgba(46, 204, 113, 0.4); --selection: #143a24;
+}
+:root[data-theme='newyear'] {
+  --bg: #0b0b10; --bg-elev: #14141c; --bg-titlebar: #08080c;
+  --fg: #f4ead0; --fg-muted: #8a7d5a;
+  --accent: #ffd700; --accent-2: #c0c0c0; --ok: #ffd700; --err: #ff5555; --warn: #ffe680;
+  --glow: rgba(255, 215, 0, 0.5); --selection: #4d4000;
+}
+:root[data-theme='lunar'] {
+  --bg: #1a0606; --bg-elev: #260a0a; --bg-titlebar: #140404;
+  --fg: #ffe9c7; --fg-muted: #b06a5a;
+  --accent: #ffcf40; --accent-2: #ff5a4d; --ok: #ffcf40; --err: #ff5a4d; --warn: #ffcf40;
+  --glow: rgba(255, 207, 64, 0.5); --selection: #5a1414;
+}
+:root[data-theme='valentine'] {
+  --bg: #1e0d14; --bg-elev: #2a121d; --bg-titlebar: #170a0f;
+  --fg: #ffe3ee; --fg-muted: #b86f8c;
+  --accent: #ff4d80; --accent-2: #ff9ec4; --ok: #7ef0b0; --err: #ff5566; --warn: #ffb3c9;
+  --glow: rgba(255, 77, 128, 0.45); --selection: #5a1f38;
+}
+/* aureus — the secret gold theme, unlocked only by ascending (see the ARG) */
+:root[data-theme='aureus'] {
+  --bg: #14100a; --bg-elev: #1f1810; --bg-titlebar: #0f0b06;
+  --fg: #ffe9a8; --fg-muted: #9c7f42;
+  --accent: #ffd24a; --accent-2: #fff1b0; --ok: #ffd24a; --err: #ff7a5c; --warn: #ffe08a;
+  --glow: rgba(255, 210, 74, 0.5); --selection: #4d3a12;
+}
+
+/* CRT extras: phosphor glow + scanlines (reduced-motion drops the flicker) */
+:root[data-theme='crt'] body,
+:root[data-theme='amber'] body {
+  text-shadow: 0 0 6px var(--glow);
+}
+:root[data-theme='crt'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.22) 0px,
+    rgba(0, 0, 0, 0.22) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  animation: crt-flicker 0.12s infinite;
+}
+@keyframes crt-flicker {
+  0% { opacity: 0.97; }
+  50% { opacity: 1; }
+  100% { opacity: 0.98; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme='crt'] body::after { animation: none; }
+}
